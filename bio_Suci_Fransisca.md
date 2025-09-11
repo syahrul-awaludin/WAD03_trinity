@@ -1,0 +1,7 @@
+Nama : Suci Fransisca Sisilia Rahmat
+NIM : 24120500008
+Email : sisiliafransisca25@gmail.com
+Mahasiswa yang sedang merintis menjadi data science
+keep growing and shining 🌱✨
+
+
