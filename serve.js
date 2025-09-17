@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-
+const aboutUsRoutes = require('./routes/aboutUsRoutes');
 const app = express();
 
 // Middleware for parsing JSON and URL-encoded data
@@ -14,6 +14,8 @@ console.log('Starting WAD03_trinity server...');
 // Use routes from routes/index.js
 const routes = require("./routes");
 app.use("/", routes);
+// Use routes from routes/aboutUsRoutes.js
+app.use('/', aboutUsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
