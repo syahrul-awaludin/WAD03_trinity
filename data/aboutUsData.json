@@ -1,5 +1,5 @@
 [
-  { "name": "syahrul", "nim": "2412040006" },
-  { "name": "suci", "nim": "24120500008" },
-  { "name": "zulfikar", "nim": "24120500006" }
+  { "user": "syahrul", "name": "Syahrul Awwaludin", "nim": "2412040006" },
+  { "user": "suci", "name": "Suci Fransisca Sisilia", "nim": "24120500008" },
+  { "user": "zulfikar", "name": "Zulfikar Ditya Antariksa", "nim": "24120500006" }
 ]
