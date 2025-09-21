@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const users = require('../data/aboutUsData.json'); 
 
-// GET /aboutus/:name
-router.get('/aboutus/:name', (req, res) => {
-  const { name } = req.params;
-  const foundUser = users.find(u => u.name === name);
+// GET /aboutus/:user
+router.get('/aboutus/:user', (req, res) => {
+  const { user } = req.params;
+  const foundUser = users.find(u => u.user === user);
 
   if (foundUser) {
     res.json({
