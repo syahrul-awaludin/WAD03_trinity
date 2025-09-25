@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const aboutUsRoutes = require("./routes/aboutUsRoutes");
 const userRoutes = require("./routes/users"); // import user routes
+const productRoutes = require("./routes/products"); // import product routes
 const app = express();
 
 app.use(express.json());
@@ -11,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use("/", aboutUsRoutes);
 app.use("/", userRoutes);
+app.use("/", productRoutes);
 
 app.use((err, req, res, next) => {
 	console.error(err.stack);
