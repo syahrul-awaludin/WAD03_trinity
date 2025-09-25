@@ -1,14 +1,4 @@
-const fs = require("fs");
-const path = require("path");
-const userFilePath = path.join(__dirname, "../data/user.json");
-
-function readUsers() {
-	return JSON.parse(fs.readFileSync(userFilePath, "utf8"));
-}
-
-function writeUsers(users) {
-	fs.writeFileSync(userFilePath, JSON.stringify(users, null, 2), "utf8");
-}
+const users = [];
 
 // Helper function for email validation
 function isValidEmail(email) {
@@ -53,7 +43,6 @@ exports.createUser = (req, res) => {
 	}
 
 	/**Username and form vaidation */
-	const users = readUsers();
 	if (users.find((u) => u.username === username)) {
 		return res
 			.status(409)
@@ -63,20 +52,17 @@ exports.createUser = (req, res) => {
 	// Use plain JS object
 	const user = { username, name, email, role };
 	users.push(user);
-	writeUsers(users);
 	res.status(201).json({ success: true, user });
 };
 
 // GET /users =======================================
 exports.getUsers = (req, res) => {
-	const users = readUsers();
 	res.json({ success: true, users });
 };
 
 // GET /users/:username ===============================================
 exports.getUserByUsername = (req, res) => {
 	const { username } = req.params;
-	const users = readUsers();
 	const user = users.find((u) => u.username === username);
 	if (!user) {
 		return res.status(404).json({ success: false, message: "User not found." });
@@ -92,7 +78,6 @@ exports.updateUser = (req, res) => {
 			.json({ success: false, message: "Request body is missing." });
 	}
 	const { username } = req.params;
-	const users = readUsers();
 	const user = users.find((u) => u.username === username);
 	if (!user) {
 		return res.status(404).json({ success: false, message: "User not found." });
@@ -133,5 +118,4 @@ exports.updateUser = (req, res) => {
 	if (email) user.email = email;
 	if (role) user.role = role;
 	res.json({ success: true, user });
-	writeUsers(users);
 };
