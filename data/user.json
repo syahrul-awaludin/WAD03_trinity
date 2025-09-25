@@ -1,0 +1,26 @@
+[
+	{
+		"username": "seller01",
+		"name": "Alice Seller",
+		"email": "alice.seller@example.com",
+		"role": "seller"
+	},
+	{
+		"username": "seller02",
+		"name": "Bob Seller",
+		"email": "bob.seller@example.com",
+		"role": "seller"
+	},
+	{
+		"username": "buyer01",
+		"name": "Charlie Buyer",
+		"email": "charlie.buyer@example.com",
+		"role": "buyer"
+	},
+	{
+		"username": "buyer02",
+		"name": "Dana Buyer",
+		"email": "dana.buyer@example.com",
+		"role": "buyer"
+	}
+]
