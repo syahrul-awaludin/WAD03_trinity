@@ -12,7 +12,9 @@ exports.createProduct = (req, res) => {
   // cek user berdasarkan owner
   const user = users.find(u => u.username === owner);
   if (!user) {
+    console.log(user)
     return res.status(404).json({ success: false, message: "User not found!" });
+
   }
 
   // cek role user
@@ -20,15 +22,23 @@ exports.createProduct = (req, res) => {
     return res.status(403).json({ success: false, message: "Only sellers can add products!" });
   }
 
+  //Validasi input untuk product harus diisi semua
+  if (!productName || !productCategory || price == null || !owner) {
+    return res.status(400).json({ success: false, message: "All fields are required!" });
+  }
+
   // Tambahkan produk
   const newProduct = { productName, productCategory, price, owner };
   products.push(newProduct);
+  console.log(users)
   return res.status(201).json({ success: true, message: "Product added successfully!", product: newProduct });
 };
+
 
 exports.getProducts = (res) => {
   res.json(products);
 };
+
 
 exports.getProductByName = (req, res) => {
   const product = products.find(p => p.productName === req.params.product_name);
