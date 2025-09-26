@@ -3,12 +3,12 @@
     "productName": "Whiskas",
     "productCategory": "Makanan Kucing",
     "price": 200000,
-    "owner": "Seller1"
+    "owner": "seller01"
   },
   {
     "productName": "Pedigree",
     "productCategory": "Makanan Anjing",
     "price": 300000,
-    "owner": "Seller2"
+    "owner": "seller02"
   }
 ]
