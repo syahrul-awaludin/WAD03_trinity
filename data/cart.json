@@ -1,0 +1,24 @@
+[
+  {
+    "username": "buyer01",
+    "items": [
+      {
+        "productName": "Whiskas",
+        "quantity": 5
+      }
+    ]
+  },
+  {
+    "username": "buyer02",
+    "items": [
+      {
+        "productName": "Pedigree",
+        "quantity": 3
+      },
+      {
+        "productName": "Whiskas",
+        "quantity": 1
+      }
+    ]
+  }
+]
