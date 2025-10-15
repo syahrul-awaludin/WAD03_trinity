@@ -24,46 +24,48 @@ This will start your Express application in development mode.
 
 This project can use Prisma as the ORM to manage database schema, migrations, and a type-safe client.
 
-Quick steps
+### Configure Database Connection
 
-1. Install Prisma CLI and the client:
+Edit your `.env` file and add your database connection string:
+
+```
+DATABASE_URL="postgresql://username:password@localhost:5432/database_name"
+```
+
+Replace with your actual database credentials. Prisma supports PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, and CockroachDB.
+
+### Common Prisma Commands
+
+1. **Create a new table**  
+   Edit your `schema.prisma` file to add a new model, then run:
 
    ```
-   npm install prisma --save-dev
-   npm install @prisma/client
+   npx prisma migrate dev --name add_table_name
    ```
 
-2. Initialize Prisma (creates `prisma/` and `.env` entries):
+2. **Generate Prisma Client**  
+   After modifying your schema, regenerate the client:
 
    ```
-   npx prisma init
+   npx prisma generate
    ```
 
-3. Set your DATABASE_URL in `.env`. Examples:
-   - Postgres:
-     ```
-     DATABASE_URL="postgresql://user:password@localhost:5432/mydb?schema=public"
-     ```
+3. **View your database**  
+   Open Prisma Studio to browse and edit data:
 
-Common commands
+   ```
+   npx prisma studio
+   ```
 
-- Create initial migration and apply (recommended for SQL DBs):
-  ```
-  npx prisma migrate dev --name init
-  ```
-- Push schema changes directly (no migrations):
-  ```
-  npx prisma db push
-  ```
-- Introspect an existing DB:
-  ```
-  npx prisma db pull
-  ```
-- Generate the Prisma Client (usually run automatically after migrate/push):
-  ```
-  npx prisma generate
-  ```
-- Open Prisma Studio (web GUI):
-  ```
-  npx prisma studio
-  ```
+4. **Reset database**  
+   Drop all data and re-run migrations:
+
+   ```
+   npx prisma migrate reset
+   ```
+
+5. **Push schema changes without migration**  
+   Useful for prototyping:
+   ```
+   npx prisma db push
+   ```
