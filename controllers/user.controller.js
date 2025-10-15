@@ -56,14 +56,14 @@ const UserValidator = {
 };
 
 // POST /users ================================================
-exports.createUser = (req, res, next) => {
+exports.createUser = async (req, res, next) => {
 	try {
 		if (!req.body || Object.keys(req.body).length === 0) {
 			throw new BadRequestError("Request body is missing.");
 		}
 		UserValidator.validateCreateUser(req.body);
 
-		const user = userService.createUser(req.body);
+		const user = await userService.createUser(req.body);
 		res.status(201).json({ success: true, user });
 	} catch (error) {
 		next(error);
@@ -71,9 +71,9 @@ exports.createUser = (req, res, next) => {
 };
 
 // GET /users =======================================
-exports.getUsers = (req, res, next) => {
+exports.getUsers = async (req, res, next) => {
 	try {
-		const users = userService.getAllUsers();
+		const users = await userService.getAllUsers();
 		res.json({ success: true, users });
 	} catch (error) {
 		next(error);
@@ -81,14 +81,14 @@ exports.getUsers = (req, res, next) => {
 };
 
 // GET /users/:username ===============================================
-exports.getUserByUsername = (req, res, next) => {
+exports.getUserByUsername = async (req, res, next) => {
 	try {
 		const { username } = req.params;
 		if (!username || username.trim() === "") {
 			throw new BadRequestError("Username parameter is required.");
 		}
 
-		const user = userService.getUserByUsername(username);
+		const user = await userService.getUserByUsername(username);
 		res.json({ success: true, user });
 	} catch (error) {
 		next(error);
@@ -96,7 +96,7 @@ exports.getUserByUsername = (req, res, next) => {
 };
 
 // PATCH /users/:username ===================================================
-exports.updateUser = (req, res, next) => {
+exports.updateUser = async (req, res, next) => {
 	try {
 		if (!req.body || Object.keys(req.body).length === 0) {
 			throw new BadRequestError("Request body is missing.");
@@ -111,7 +111,7 @@ exports.updateUser = (req, res, next) => {
 		// Validate input
 		UserValidator.validateUpdateUser(req.body);
 
-		const user = userService.updateUser(username, req.body);
+		const user = await userService.updateUser(username, req.body);
 		res.json({ success: true, user });
 	} catch (error) {
 		next(error);

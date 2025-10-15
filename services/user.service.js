@@ -2,54 +2,58 @@ const userRepository = require("../repositories/user.repository");
 const { NotFoundError, ConflictError } = require("../utils/errors");
 
 class UserService {
-	createUser(userData) {
+	async createUser(userData) {
 		const { username, name, email, role } = userData;
 
 		// Check if username exists
-		if (userRepository.existsByUsername(username)) {
+		if (await userRepository.existsByUsername(username)) {
 			throw new ConflictError("Username already exists.");
 		}
 
-		// Create user
-		const user = { username, name, email, role };
-		return userRepository.create(user);
+		// Create user with uppercase role for Prisma enum
+		const user = {
+			username,
+			name,
+			email,
+			role: role.toUpperCase(),
+		};
+		return await userRepository.create(user);
 	}
 
-	getAllUsers() {
-		return userRepository.findAll();
+	async getAllUsers() {
+		return await userRepository.findAll();
 	}
 
-	getUserByUsername(username) {
-		const user = userRepository.findByUsername(username);
+	async getUserByUsername(username) {
+		const user = await userRepository.findByUsername(username);
 		if (!user) {
 			throw new NotFoundError("User not found.");
 		}
 		return user;
 	}
 
-	updateUser(username, updateData) {
+	async updateUser(username, updateData) {
 		const { name, email, role, newUsername } = updateData;
 
 		// Find existing user
-		const user = userRepository.findByUsername(username);
+		const user = await userRepository.findByUsername(username);
 		if (!user) {
 			throw new NotFoundError("User not found.");
 		}
 
-		// Check if new username already exists
+		// Prepare update data
+		const updatedFields = {};
+		if (name) updatedFields.name = name;
+		if (email) updatedFields.email = email;
+		if (role) updatedFields.role = role.toUpperCase();
 		if (newUsername && newUsername !== username) {
-			if (userRepository.existsByUsername(newUsername)) {
+			if (await userRepository.existsByUsername(newUsername)) {
 				throw new ConflictError("New username already exists.");
 			}
-			user.username = newUsername;
+			updatedFields.username = newUsername;
 		}
 
-		// Update fields
-		if (name) user.name = name;
-		if (email) user.email = email;
-		if (role) user.role = role;
-
-		return userRepository.update(username, user);
+		return await userRepository.update(username, updatedFields);
 	}
 }
 
