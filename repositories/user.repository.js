@@ -1,46 +1,34 @@
-const fs = require("fs");
-const path = require("path");
-const userFilePath = path.join(__dirname, "../data/user.json");
+const prisma = require("./prisma");
 
 class UserRepository {
-	readUsers() {
-		return JSON.parse(fs.readFileSync(userFilePath, "utf8"));
+	async findAll() {
+		return await prisma.user.findMany();
 	}
 
-	writeUsers(users) {
-		fs.writeFileSync(userFilePath, JSON.stringify(users, null, 2), "utf8");
+	async findByUsername(username) {
+		return await prisma.user.findUnique({
+			where: { username },
+		});
 	}
 
-	findAll() {
-		return this.readUsers();
+	async existsByUsername(username) {
+		const user = await prisma.user.findUnique({
+			where: { username },
+		});
+		return user !== null;
 	}
 
-	findByUsername(username) {
-		const users = this.readUsers();
-		return users.find((u) => u.username === username);
+	async create(user) {
+		return await prisma.user.create({
+			data: user,
+		});
 	}
 
-	existsByUsername(username) {
-		const users = this.readUsers();
-		return users.some((u) => u.username === username);
-	}
-
-	create(user) {
-		const users = this.readUsers();
-		users.push(user);
-		this.writeUsers(users);
-		return user;
-	}
-
-	update(username, updatedUser) {
-		const users = this.readUsers();
-		const index = users.findIndex((u) => u.username === username);
-		if (index !== -1) {
-			users[index] = updatedUser;
-			this.writeUsers(users);
-			return updatedUser;
-		}
-		return null;
+	async update(username, updatedUser) {
+		return await prisma.user.update({
+			where: { username },
+			data: updatedUser,
+		});
 	}
 }
 
