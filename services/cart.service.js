@@ -1,123 +1,156 @@
 const cartRepo = require("../repositories/cart.repository");
+const cartService = require("../services/cart.service");
 
-// --- Authorization Logic ---
-function authorize(usernameParam, loggedInUser) {
-  const user = cartRepo.findUserByUsername(usernameParam);
+jest.mock("../repositories/cart.repository");
 
-  if (!user) return { ok: false, message: "User not found", status: 404 };
-  if (user.role !== "buyer")
-    return { ok: false, message: "Only buyers can access cart", status: 403 };
-  if (loggedInUser !== usernameParam)
-    return {
-      ok: false,
-      message: "You cannot access someone else's cart",
-      status: 403,
-    };
+describe("CartService", () => {
+  const username = "alice";
+  const loggedInUser = "alice";
 
-  return { ok: true, user };
-}
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-// --- Service: Get Cart ---
-exports.getCartService = (username, loggedInUser) => {
-  const auth = authorize(username, loggedInUser);
-  if (!auth.ok) return auth;
+  // --- getCartService ---
+  describe("getCartService", () => {
+    it("should return existing cart if found", () => {
+      const mockUser = { username, role: "buyer" };
+      const mockCart = { username, items: [] };
 
-  let cart = cartRepo.findCartByUsername(username);
-  if (!cart) {
-    cart = cartRepo.createEmptyCart(username);
-  }
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.findCartByUsername.mockReturnValue(mockCart);
 
-  return { ok: true, cart };
-};
+      const result = cartService.getCartService(username, loggedInUser);
 
-// --- Service: Add to Cart ---
-exports.addToCartService = (username, loggedInUser, productName, quantity) => {
-  const auth = authorize(username, loggedInUser);
-  if (!auth.ok) return auth;
+      expect(cartRepo.findUserByUsername).toHaveBeenCalledWith(username);
+      expect(cartRepo.findCartByUsername).toHaveBeenCalledWith(username);
+      expect(cartRepo.createEmptyCart).not.toHaveBeenCalled();
+      expect(result).toEqual(mockCart);
+    });
 
-  if (!productName || quantity === undefined)
-    return { ok: false, status: 400, message: "productName and quantity are required" };
+    it("should create empty cart if not found", () => {
+      const mockUser = { username, role: "buyer" };
+      const mockNewCart = { username, items: [] };
 
-  const qty = parseInt(quantity, 10);
-  if (isNaN(qty) || qty <= 0)
-    return { ok: false, status: 400, message: "quantity must be a positive integer" };
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.findCartByUsername.mockReturnValue(null);
+      cartRepo.createEmptyCart.mockReturnValue(mockNewCart);
 
-  const product = cartRepo.findProductByName(productName);
-  if (!product)
-    return { ok: false, status: 404, message: `Product not found: ${productName}` };
+      const result = cartService.getCartService(username, loggedInUser);
 
-  const carts = cartRepo.getAllCarts();
-  let cart = carts.find((c) => c.username === username);
+      expect(cartRepo.findUserByUsername).toHaveBeenCalledWith(username);
+      expect(cartRepo.createEmptyCart).toHaveBeenCalledWith(username);
+      expect(result).toEqual(mockNewCart);
+    });
+  });
 
-  if (!cart) {
-    cart = { username, items: [] };
-    carts.push(cart);
-  }
+  // --- addToCartService ---
+  describe("addToCartService", () => {
+    it("should add a new product to cart if not exists", () => {
+      const mockUser = { username, role: "buyer" };
+      const productName = "Laptop";
+      const quantity = 2;
+      const mockProduct = { productName };
+      const mockCarts = [{ username, items: [] }];
 
-  if (!Array.isArray(cart.items)) cart.items = [];
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.findProductByName.mockReturnValue(mockProduct);
+      cartRepo.getAllCarts.mockReturnValue(mockCarts);
 
-  const existingItem = cart.items.find(
-    (i) => i.productName.toLowerCase() === productName.toLowerCase()
-  );
+      const result = cartService.addToCartService(username, loggedInUser, productName, quantity);
 
-  if (existingItem) {
-    existingItem.quantity += qty;
-  } else {
-    cart.items.push({ productName: product.productName, quantity: qty });
-  }
+      expect(cartRepo.getAllCarts).toHaveBeenCalled();
+      expect(cartRepo.saveCarts).toHaveBeenCalled();
+      expect(result.items[0]).toEqual({ productName, quantity });
+    });
 
-  cartRepo.saveCarts(carts);
+    it("should update quantity if product already exists in cart", () => {
+      const mockUser = { username, role: "buyer" };
+      const productName = "Phone";
+      const quantity = 3;
+      const mockProduct = { productName };
+      const mockCarts = [
+        { username, items: [{ productName, quantity: 1 }] },
+      ];
 
-  return { ok: true, cart };
-};
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.findProductByName.mockReturnValue(mockProduct);
+      cartRepo.getAllCarts.mockReturnValue(mockCarts);
 
-// --- Service: Remove from Cart ---
-exports.removeFromCartService = (username, loggedInUser, productName) => {
-  const auth = authorize(username, loggedInUser);
-  if (!auth.ok) return auth;
+      const result = cartService.addToCartService(username, loggedInUser, productName, quantity);
 
-  if (!productName)
-    return { ok: false, status: 400, message: "productName is required" };
+      expect(result.items[0].quantity).toBe(4);
+      expect(cartRepo.saveCarts).toHaveBeenCalled();
+    });
 
-  const carts = cartRepo.getAllCarts();
-  const cart = carts.find((c) => c.username === username);
-  if (!cart)
-    return { ok: false, status: 404, message: "Cart not found" };
+    it("should throw error if product not found", () => {
+      const mockUser = { username, role: "buyer" };
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.findProductByName.mockReturnValue(null);
 
-  cart.items = cart.items.filter(
-    (i) => i.productName.toLowerCase() !== productName.toLowerCase()
-  );
-  cartRepo.saveCarts(carts);
+      expect(() =>
+        cartService.addToCartService(username, loggedInUser, "Unknown", 2)
+      ).toThrow("PRODUCT_NOT_FOUND");
+    });
+  });
 
-  return { ok: true, cart };
-};
+  // --- removeFromCartService ---
+  describe("removeFromCartService", () => {
+    it("should remove product from cart", () => {
+      const mockUser = { username, role: "buyer" };
+      const productName = "Phone";
+      const mockCarts = [
+        { username, items: [{ productName, quantity: 2 }] },
+      ];
 
-// --- Service: Update Quantity ---
-exports.updateCartService = (username, loggedInUser, productName, quantity) => {
-  const auth = authorize(username, loggedInUser);
-  if (!auth.ok) return auth;
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.getAllCarts.mockReturnValue(mockCarts);
 
-  if (!productName || quantity === undefined)
-    return { ok: false, status: 400, message: "productName and quantity are required" };
+      const result = cartService.removeFromCartService(username, loggedInUser, productName);
 
-  const qty = parseInt(quantity, 10);
-  if (isNaN(qty) || qty <= 0)
-    return { ok: false, status: 400, message: "quantity must be a positive integer" };
+      expect(result.items.length).toBe(0);
+      expect(cartRepo.saveCarts).toHaveBeenCalled();
+    });
 
-  const carts = cartRepo.getAllCarts();
-  const cart = carts.find((c) => c.username === username);
-  if (!cart)
-    return { ok: false, status: 404, message: "Cart not found" };
+    it("should throw error if cart not found", () => {
+      const mockUser = { username, role: "buyer" };
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.getAllCarts.mockReturnValue([]);
 
-  const item = cart.items.find(
-    (i) => i.productName.toLowerCase() === productName.toLowerCase()
-  );
+      expect(() =>
+        cartService.removeFromCartService(username, loggedInUser, "Phone")
+      ).toThrow("CART_NOT_FOUND");
+    });
+  });
 
-  if (!item)
-    return { ok: false, status: 404, message: "Product not found in cart" };
+  // --- updateCartService ---
+  describe("updateCartService", () => {
+    it("should update item quantity", () => {
+      const mockUser = { username, role: "buyer" };
+      const productName = "Phone";
+      const mockCarts = [
+        { username, items: [{ productName, quantity: 1 }] },
+      ];
 
-  item.quantity = qty;
-  cartRepo.saveCarts(carts);
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.getAllCarts.mockReturnValue(mockCarts);
 
-  return { ok: true, cart };
-};
+      const result = cartService.updateCartService(username, loggedInUser, productName, 5);
+
+      expect(result.items[0].quantity).toBe(5);
+      expect(cartRepo.saveCarts).toHaveBeenCalled();
+    });
+
+    it("should throw error if item not found", () => {
+      const mockUser = { username, role: "buyer" };
+      const mockCarts = [{ username, items: [] }];
+
+      cartRepo.findUserByUsername.mockReturnValue(mockUser);
+      cartRepo.getAllCarts.mockReturnValue(mockCarts);
+
+      expect(() =>
+        cartService.updateCartService(username, loggedInUser, "Unknown", 3)
+      ).toThrow("ITEM_NOT_FOUND");
+    });
+  });
+});
