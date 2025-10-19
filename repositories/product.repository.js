@@ -1,34 +1,37 @@
-const products = require('../data/productsData.json');
+const prisma = require("./prisma");
 
 class ProductRepository {
-  getProducts() {
-    return products;
+  async createProduct(productData) {
+    return await prisma.product.create({
+      data: productData,
+    });
   }
 
-  getProductByName(product_name) {
-    return products.find(p => p.productName === product_name);
+  async getAllProducts() {
+    return await prisma.product.findMany();
   }
 
-  createProduct(productData) {
-    products.push(productData);
-    return productData;
+  async getProductByName(product_name) {
+    return await prisma.product.findFirst({
+      where: { productName: product_name },
+    });
   }
 
-  updateProduct(product_name, updatedFields) {
-    const product = this.getProductByName(product_name);
-    if (product) {
-      Object.assign(product, updatedFields);
-      return product;
-    }
+  async updateProduct(product_name, updatedFields) {
+    const product = await prisma.product.findFirst({ where: { productName: product_name } });
+    if (!product) return null;
+    return await prisma.product.update({
+      where: { id: product.id },
+      data: updatedFields,
+    });
   }
 
-  deleteProduct(product_name) {
-    const index = products.findIndex(p => p.productName === product_name);
-    if (index !== -1) {
-      const deleted = products.splice(index, 1)[0];
-      return deleted;
-    }
-    return null;
+  async deleteProduct(product_name) {
+    const product = await prisma.product.findFirst({ where: { productName: product_name } });
+    if (!product) return null;
+    return await prisma.product.delete({
+      where: { id: product.id },
+    });
   }
 }
 
