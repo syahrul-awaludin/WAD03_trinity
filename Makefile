@@ -1,4 +1,4 @@
-.PHONY: help install dev start migrate generate push studio reset seed format
+.PHONY: help install dev start migrate generate push studio reset seed format test
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,7 @@ help:
 	@echo "  make db-reset      - Reset database"
 	@echo "  make db-seed       - Seed database"
 	@echo "  make db-format     - Format Prisma schema"
+	@echo "  make test       - Run tests"
 
 install:
 	npm install
@@ -42,3 +43,6 @@ db-seed:
 
 db-format:
 	npx prisma format
+
+test:
+	npm test

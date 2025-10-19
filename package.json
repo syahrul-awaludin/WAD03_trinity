@@ -16,7 +16,8 @@
 	"main": "serve.js",
 	"scripts": {
 		"start": "node serve.js",
-		"dev": "nodemon serve.js"
+		"dev": "nodemon serve.js",
+		"test": "jest"
 	},
 	"dependencies": {
 		"@prisma/client": "^6.17.1",
@@ -24,6 +25,7 @@
 		"express": "^5.1.0"
 	},
 	"devDependencies": {
+		"jest": "^29.7.0",
 		"nodemon": "^3.1.10",
 		"prisma": "^6.17.1"
 	}
