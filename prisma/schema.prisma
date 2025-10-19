@@ -27,15 +27,39 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[] @relation("UserProducts")
+  carts     Cart[]
 }
 
 model Product {
-  id              Int      @id @default(autoincrement())
+  id              Int        @id @default(autoincrement())
   productName     String
   productCategory String
   price           Int
   ownerId         String
-  owner           User     @relation("UserProducts", fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  owner           User       @relation("UserProducts", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  cartItems       CartItem[]
+}
+
+model Cart {
+  id        Int      @id @default(autoincrement())
+  buyerId   String
+  buyer     User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }

@@ -47,3 +47,36 @@ exports.createEmptyCart = (username) => {
   saveData(cartsFile, carts);
   return newCart;
 };
+
+// cart.repository.js
+const prisma = require("./prisma");
+
+const cartRepository = {
+  async findAll() {
+    return prisma.cart.findMany({ include: { items: true } });
+  },
+
+  async findById(id) {
+    return prisma.cart.findUnique({ where: { id }, include: { items: true } });
+  },
+
+  async create(data) {
+    return prisma.cart.create({ data });
+  },
+
+  async addItem(cartId, productId, quantity) {
+    return prisma.cartItem.create({
+      data: { cartId, productId, quantity },
+    });
+  },
+
+  async removeItem(itemId) {
+    return prisma.cartItem.delete({ where: { id: itemId } });
+  },
+
+  async delete(id) {
+    return prisma.cart.delete({ where: { id } });
+  },
+};
+
+module.exports = cartRepository;
