@@ -1,82 +1,76 @@
-const fs = require("fs");
-const path = require("path");
+// repositories/cart.repository.js
+const prisma = require('./prisma');
 
-const cartsFile = path.join(__dirname, "../data/cart.json");
-const usersFile = path.join(__dirname, "../data/user.json");
-const productsFile = path.join(__dirname, "../data/productsData.json");
-
-// --- Utility ---
-function loadData(file) {
-  if (!fs.existsSync(file)) return [];
-  const content = fs.readFileSync(file, "utf-8");
-  return content.trim() ? JSON.parse(content) : [];
-}
-
-function saveData(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
-
-// --- User Repository ---
-exports.findUserByUsername = (username) => {
-  const users = loadData(usersFile);
-  return users.find((u) => u.username === username);
-};
-
-// --- Product Repository ---
-exports.findProductByName = (productName) => {
-  const products = loadData(productsFile);
-  return products.find(
-    (p) => p.productName.toLowerCase() === productName.toLowerCase()
-  );
-};
-
-// --- Cart Repository ---
-exports.getAllCarts = () => loadData(cartsFile);
-
-exports.findCartByUsername = (username) => {
-  const carts = loadData(cartsFile);
-  return carts.find((c) => c.username === username);
-};
-
-exports.saveCarts = (carts) => saveData(cartsFile, carts);
-
-exports.createEmptyCart = (username) => {
-  const carts = loadData(cartsFile);
-  const newCart = { username, items: [] };
-  carts.push(newCart);
-  saveData(cartsFile, carts);
-  return newCart;
-};
-
-// cart.repository.js
-const prisma = require("./prisma");
-
-const cartRepository = {
-  async findAll() {
-    return prisma.cart.findMany({ include: { items: true } });
-  },
-
-  async findById(id) {
-    return prisma.cart.findUnique({ where: { id }, include: { items: true } });
-  },
-
-  async create(data) {
-    return prisma.cart.create({ data });
-  },
-
-  async addItem(cartId, productId, quantity) {
-    return prisma.cartItem.create({
-      data: { cartId, productId, quantity },
+class CartRepository {
+  /**
+   * Mencari keranjang belanja berdasarkan ID pengguna (UUID).
+   * Ini adalah fungsi utama untuk mendapatkan keranjang.
+   */
+  async findCartByUserId(userId) {
+    return await prisma.cart.findFirst({
+      where: { buyerId: userId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
     });
-  },
+  }
 
-  async removeItem(itemId) {
-    return prisma.cartItem.delete({ where: { id: itemId } });
-  },
+  /**
+   * Membuat keranjang belanja baru yang kosong untuk pengguna.
+   */
+  async createCart(userId) {
+    return await prisma.cart.create({
+      data: {
+        buyerId: userId,
+      },
+      include: {
+        items: true,
+      },
+    });
+  }
 
-  async delete(id) {
-    return prisma.cart.delete({ where: { id } });
-  },
-};
 
-module.exports = cartRepository;
+  async findCartItemByProductId(cartId, productId) {
+    return await prisma.cartItem.findFirst({
+      where: {
+        cartId: cartId,
+        productId: productId,
+      },
+    });
+  }
+
+
+  async addCartItem(cartId, productId, quantity) {
+    return await prisma.cartItem.create({
+      data: {
+        cartId: cartId,
+        productId: productId,
+        quantity: quantity,
+      },
+    });
+  }
+
+
+  async updateItemQuantity(cartItemId, newQuantity) {
+    return await prisma.cartItem.update({
+      where: { id: cartItemId },
+      data: { quantity: newQuantity },
+    });
+  }
+
+  async removeCartItemByProductId(cartId, productId) {
+    // Kita gunakan deleteMany karena ia bisa menargetkan berdasarkan kondisi
+    return await prisma.cartItem.deleteMany({
+      where: {
+        cartId: cartId,
+        productId: productId,
+      },
+    });
+  }
+}
+
+module.exports = new CartRepository();

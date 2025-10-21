@@ -1,153 +1,191 @@
-// cart.repository.test.js
+// repositories/cart.repository.test.js
+const cartRepository = require('./cart.repository');
+const prisma = require('./prisma'); // Mock stateful
 
+jest.mock('./prisma', () => {
+  let carts = [];
+  let cartItems = [];
+  let products = [];
+  let cartIdCounter = 1;
+  let cartItemIdCounter = 1;
 
-jest.mock("./prisma", () => {
-  // Simulasi data in-memory untuk pengujian
-  let carts = [
-    {
-      id: 1,
-      buyerId: "buyer-uuid-001",
-      items: [
-        { id: 1, cartId: 1, productId: 1, quantity: 2 },
-        { id: 2, cartId: 1, productId: 2, quantity: 1 },
-      ],
-    },
-  ];
-
-  let products = [
-    { id: 1, productName: "Pedigree", productCategory: "Makanan Anjing", price: 3000000, ownerId: "seller-uuid-001" },
-    { id: 2, productName: "Whiskas", productCategory: "Makanan Kucing", price: 1500000, ownerId: "seller-uuid-001" },
-  ];
+  const getFullCart = (cart) => {
+    if (!cart) return null;
+    const items = cartItems
+      .filter(item => item.cartId === cart.id)
+      .map(item => ({
+        ...item,
+        product: products.find(p => p.id === item.productId) || null,
+      }));
+    return { ...cart, items };
+  };
 
   return {
     cart: {
-      findMany: jest.fn(() => Promise.resolve(carts.slice())),
-      findUnique: jest.fn(({ where }) => Promise.resolve(carts.find((c) => c.id === where.id) || null)),
-      create: jest.fn(({ data }) => {
-        const newCart = { id: carts.length + 1, ...data, items: [] };
+      findFirst: jest.fn(({ where }) => {
+        const cart = carts.find(c => c.buyerId === where.buyerId);
+        return Promise.resolve(getFullCart(cart));
+      }),
+      create: jest.fn(({ data, include }) => {
+        const newCart = { id: cartIdCounter++, ...data };
         carts.push(newCart);
-        return Promise.resolve(newCart);
-      }),
-      update: jest.fn(({ where, data }) => {
-        const idx = carts.findIndex((c) => c.id === where.id);
-        if (idx === -1) throw new Error("Cart not found");
-        carts[idx] = { ...carts[idx], ...data };
-        return Promise.resolve(carts[idx]);
-      }),
-      delete: jest.fn(({ where }) => {
-        const idx = carts.findIndex((c) => c.id === where.id);
-        if (idx === -1) throw new Error("Cart not found");
-        const removed = carts.splice(idx, 1)[0];
-        return Promise.resolve(removed);
+        return Promise.resolve(include?.items ? getFullCart(newCart) : newCart);
       }),
     },
     cartItem: {
+      // [BARU] Mock untuk findCartItemByProductId
+      findFirst: jest.fn(({ where }) => {
+        const item = cartItems.find(i => 
+          i.cartId === where.cartId && i.productId === where.productId
+        );
+        return Promise.resolve(item || null);
+      }),
       create: jest.fn(({ data }) => {
-        const newItem = { id: Date.now(), ...data };
-        const cart = carts.find((c) => c.id === data.cartId);
-        if (cart) cart.items.push(newItem);
+        const newItem = { id: cartItemIdCounter++, ...data };
+        cartItems.push(newItem);
         return Promise.resolve(newItem);
       }),
-      delete: jest.fn(({ where }) => {
-        for (const cart of carts) {
-          const idx = cart.items.findIndex((i) => i.id === where.id);
-          if (idx !== -1) {
-            const removed = cart.items.splice(idx, 1)[0];
-            return Promise.resolve(removed);
+      update: jest.fn(({ where, data }) => {
+        const idx = cartItems.findIndex(i => i.id === where.id);
+        if (idx === -1) throw new Error('CartItem not found');
+        cartItems[idx] = { ...cartItems[idx], ...data };
+        return Promise.resolve(cartItems[idx]);
+      }),
+      // [UBAH] Mock untuk removeCartItemByProductId
+      deleteMany: jest.fn(({ where }) => {
+        let count = 0;
+        const newItems = cartItems.filter(item => {
+          const match = item.cartId === where.cartId && item.productId === where.productId;
+          if (match) {
+            count++;
+            return false; // Hapus
           }
-        }
-        throw new Error("CartItem not found");
+          return true; // Pertahankan
+        });
+        cartItems = newItems;
+        return Promise.resolve({ count });
       }),
     },
-    product: {
-      findUnique: jest.fn(({ where }) => Promise.resolve(products.find((p) => p.id === where.id) || null)),
-    },
-    __setData: (newCarts, newProducts) => {
-      carts = newCarts.slice();
-      products = newProducts.slice();
+    __setData: (data) => {
+      carts = data.carts ? data.carts.slice() : [];
+      cartItems = data.cartItems ? data.cartItems.slice() : [];
+      products = data.products ? data.products.slice() : [];
+      cartIdCounter = (carts.length > 0 ? Math.max(...carts.map(c => c.id)) : 0) + 1;
+      cartItemIdCounter = (cartItems.length > 0 ? Math.max(...cartItems.map(i => i.id)) : 0) + 1;
     },
     __reset: () => {
-      carts = [];
-      products = [];
+      carts = []; cartItems = []; products = [];
+      cartIdCounter = 1; cartItemIdCounter = 1;
     },
   };
 });
 
-const prisma = require("./prisma");
-const cartRepository = require("./cart.repository");
+describe('Cart Repository', () => {
+  
+  // --- Data Konsisten dari tes User & Product ---
+  const MOCK_SELLER_ID = "41cb97a0-1dcd-42fa-9d22-57afd43259f9";
+  
+  // Ini adalah asumsi kunci: 
+  // Kita harus *menetapkan* UUID untuk 'alice' dari tes user.
+  // Mari kita buat UUID baru untuknya agar tidak bentrok dengan seller.
+  const MOCK_USER_ALICE_ID = "a11ce-a11ce-a11ce-a11ce-a11ce";
 
-describe("CartRepository (jest mock prisma)", () => {
+  const MOCK_PRODUCT_PEDIGREE = {
+    id: 1,
+    productName: "Pedigree",
+    price: 3000000,
+    ownerId: MOCK_SELLER_ID,
+  };
+  const MOCK_PRODUCT_WHISKAS = {
+    id: 2,
+    productName: "Whiskas",
+    price: 2500000,
+    ownerId: "52dc97a0-2dcd-43fa-8d22-67afd43260g0",
+  };
+  
+  const MOCK_CART_ALICE = { id: 1, buyerId: MOCK_USER_ALICE_ID };
+  const MOCK_ITEM_PEDIGREE = { 
+    id: 10, 
+    cartId: MOCK_CART_ALICE.id, 
+    productId: MOCK_PRODUCT_PEDIGREE.id,
+    quantity: 2 
+  };
+  // ----------------------------------------------------
+
   beforeEach(() => {
-    prisma.__setData(
-      [
-        {
-          id: 1,
-          buyerId: "buyer-uuid-001",
-          items: [
-            { id: 1, cartId: 1, productId: 1, quantity: 2 },
-            { id: 2, cartId: 1, productId: 2, quantity: 1 },
-          ],
-        },
-      ],
-      [
-        { id: 1, productName: "Pedigree", productCategory: "Makanan Anjing", price: 3000000, ownerId: "seller-uuid-001" },
-        { id: 2, productName: "Whiskas", productCategory: "Makanan Kucing", price: 1500000, ownerId: "seller-uuid-001" },
-      ]
-    );
+    prisma.__setData({
+      products: [MOCK_PRODUCT_PEDIGREE, MOCK_PRODUCT_WHISKAS],
+      carts: [MOCK_CART_ALICE],
+      cartItems: [MOCK_ITEM_PEDIGREE],
+    });
   });
 
   afterEach(() => {
     prisma.__reset();
+    jest.clearAllMocks();
   });
 
-  test("findAll returns all carts", async () => {
-    const carts = await cartRepository.findAll();
-    expect(Array.isArray(carts)).toBe(true);
-    expect(carts).toHaveLength(1);
-    expect(carts[0].items).toHaveLength(2);
-  });
-
-  test("findById returns correct cart", async () => {
-    const cart = await cartRepository.findById(1);
+  it('should find a cart by user ID with included product details', async () => {
+    const cart = await cartRepository.findCartByUserId(MOCK_USER_ALICE_ID);
     expect(cart).not.toBeNull();
-    expect(cart.buyerId).toBe("buyer-uuid-001");
-    expect(cart.items).toHaveLength(2);
+    expect(cart.items[0].product).toEqual(MOCK_PRODUCT_PEDIGREE);
+  });
+  
+  it('should create an empty cart', async () => {
+    const newUserId = 'user-baru-uuid-789';
+    const newCart = await cartRepository.createCart(newUserId);
+    expect(newCart.buyerId).toBe(newUserId);
+    expect(newCart.items).toEqual([]);
   });
 
-  test("create creates a new cart", async () => {
-    const newCart = await cartRepository.create({
-      buyerId: "buyer-uuid-002",
-    });
-    expect(newCart).toMatchObject({ buyerId: "buyer-uuid-002" });
+  // --- TES UNTUK LOGIKA BARU/UBAH ---
 
-    const all = await cartRepository.findAll();
-    expect(all).toHaveLength(2);
+  it('should find an existing cart item by product ID', async () => {
+    const item = await cartRepository.findCartItemByProductId(
+      MOCK_CART_ALICE.id,
+      MOCK_PRODUCT_PEDIGREE.id
+    );
+    expect(item).not.toBeNull();
+    expect(item.id).toBe(MOCK_ITEM_PEDIGREE.id);
+  });
+  
+  it('should return null when finding non-existent cart item', async () => {
+    const item = await cartRepository.findCartItemByProductId(
+      MOCK_CART_ALICE.id,
+      MOCK_PRODUCT_WHISKAS.id // Whiskas belum ada di keranjang Alice
+    );
+    expect(item).toBeNull();
   });
 
-  test("addItem adds product to cart", async () => {
-    const item = await cartRepository.addItem(1, 1, 3);
-    expect(item).toMatchObject({ cartId: 1, productId: 1, quantity: 3 });
-
-    const cart = await cartRepository.findById(1);
-    expect(cart.items.some((i) => i.productId === 1)).toBe(true);
+  it('should add a new item to a cart', async () => {
+    const newItem = await cartRepository.addCartItem(
+      MOCK_CART_ALICE.id, 
+      MOCK_PRODUCT_WHISKAS.id, 
+      1 
+    );
+    expect(newItem.productId).toBe(MOCK_PRODUCT_WHISKAS.id);
+    expect(newItem.id).toBe(11); // 10 sudah ada
   });
 
-  test("removeItem removes item from cart", async () => {
-    const cart = await cartRepository.findById(1);
-    const itemId = cart.items[0].id;
-
-    const removed = await cartRepository.removeItem(itemId);
-    expect(removed.id).toBe(itemId);
-
-    const updatedCart = await cartRepository.findById(1);
-    expect(updatedCart.items.some((i) => i.id === itemId)).toBe(false);
+  it('should update an item quantity', async () => {
+    const updatedItem = await cartRepository.updateItemQuantity(MOCK_ITEM_PEDIGREE.id, 5);
+    expect(updatedItem.quantity).toBe(5);
   });
 
-  test("delete removes a cart", async () => {
-    const deleted = await cartRepository.delete(1);
-    expect(deleted.id).toBe(1);
-
-    const all = await cartRepository.findAll();
-    expect(all).toHaveLength(0);
+  it('should remove an item from a cart by product ID', async () => {
+    // Pastikan item ada dulu
+    let cart = await cartRepository.findCartByUserId(MOCK_USER_ALICE_ID);
+    expect(cart.items).toHaveLength(1);
+    
+    // Hapus
+    const result = await cartRepository.removeCartItemByProductId(
+      MOCK_CART_ALICE.id,
+      MOCK_PRODUCT_PEDIGREE.id
+    );
+    expect(result.count).toBe(1); // Pastikan 1 item terhapus
+    
+    // Cek state
+    cart = await cartRepository.findCartByUserId(MOCK_USER_ALICE_ID);
+    expect(cart.items).toHaveLength(0);
   });
 });
