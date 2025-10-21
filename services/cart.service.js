@@ -1,156 +1,84 @@
-const cartRepo = require("../repositories/cart.repository");
-const cartService = require("../services/cart.service");
+// services/cart.service.js
+const { NotFoundError, BadRequestError } = require('../utils/errors'); 
+const userRepo = require('../repositories/user.repository');
+const productRepo = require('../repositories/product.repository');
+const cartRepo = require('../repositories/cart.repository');
 
-jest.mock("../repositories/cart.repository");
+// UBAH: Menggunakan struktur Class agar konsisten
+class CartService {
+  
+  // Helper untuk mendapatkan atau membuat keranjang
+  async getOrCreateCart(userId) {
+    let cart = await cartRepo.findCartByUserId(userId);
+    if (!cart) {
+      // UBAH: createCart sekarang mengembalikan cart yang sudah lengkap
+      // (sesuai penyesuaian repository kita sebelumnya)
+      // Jadi tidak perlu findCartByUserId kedua.
+      cart = await cartRepo.createCart(userId);
+    }
+    return cart;
+  }
 
-describe("CartService", () => {
-  const username = "alice";
-  const loggedInUser = "alice";
+  async getCart(username) {
+    // UBAH: Sesuaikan nama fungsi repositori
+    const user = await userRepo.findByUsername(username); 
+    if (!user) throw new NotFoundError('User not found');
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+    // Asumsi: Objek user dari repo memiliki properti 'id'
+    // (Penting: pastikan user.repository.js Anda mengembalikan 'id' user)
+    const cart = await this.getOrCreateCart(user.id);
+    return cart;
+  }
 
-  // --- getCartService ---
-  describe("getCartService", () => {
-    it("should return existing cart if found", () => {
-      const mockUser = { username, role: "buyer" };
-      const mockCart = { username, items: [] };
+  async addToCart(username, productName, quantity) {
+    // UBAH: Sesuaikan nama fungsi repositori
+    const user = await userRepo.findByUsername(username);
+    if (!user) throw new NotFoundError('User not found');
 
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.findCartByUsername.mockReturnValue(mockCart);
+    // UBAH: Sesuaikan nama fungsi repositori
+    const product = await productRepo.getProductByName(productName);
+    if (!product) throw new NotFoundError('Product not found');
 
-      const result = cartService.getCartService(username, loggedInUser);
+    if (quantity <= 0) throw new BadRequestError('Invalid quantity');
 
-      expect(cartRepo.findUserByUsername).toHaveBeenCalledWith(username);
-      expect(cartRepo.findCartByUsername).toHaveBeenCalledWith(username);
-      expect(cartRepo.createEmptyCart).not.toHaveBeenCalled();
-      expect(result).toEqual(mockCart);
-    });
+    const cart = await this.getOrCreateCart(user.id);
 
-    it("should create empty cart if not found", () => {
-      const mockUser = { username, role: "buyer" };
-      const mockNewCart = { username, items: [] };
+    // UBAH: Gunakan fungsi repo yang lebih efisien, jangan pakai cart.items.find()
+    const existingItem = await cartRepo.findCartItemByProductId(cart.id, product.id);
 
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.findCartByUsername.mockReturnValue(null);
-      cartRepo.createEmptyCart.mockReturnValue(mockNewCart);
+    if (existingItem) {
+      const newQuantity = existingItem.quantity + quantity;
+      await cartRepo.updateItemQuantity(existingItem.id, newQuantity);
+    } else {
+      await cartRepo.addCartItem(cart.id, product.id, quantity);
+    }
 
-      const result = cartService.getCartService(username, loggedInUser);
+    // Selalu ambil data terbaru dari DB setelah modifikasi
+    return await cartRepo.findCartByUserId(user.id);
+  }
 
-      expect(cartRepo.findUserByUsername).toHaveBeenCalledWith(username);
-      expect(cartRepo.createEmptyCart).toHaveBeenCalledWith(username);
-      expect(result).toEqual(mockNewCart);
-    });
-  });
+  async removeFromCart(username, productId) {
+    // UBAH: Sesuaikan nama fungsi repositori
+    const user = await userRepo.findByUsername(username);
+    if (!user) throw new NotFoundError('User not found');
 
-  // --- addToCartService ---
-  describe("addToCartService", () => {
-    it("should add a new product to cart if not exists", () => {
-      const mockUser = { username, role: "buyer" };
-      const productName = "Laptop";
-      const quantity = 2;
-      const mockProduct = { productName };
-      const mockCarts = [{ username, items: [] }];
+    const cart = await cartRepo.findCartByUserId(user.id);
+    if (!cart) {
+      // Tidak perlu error, jika cart tidak ada, berarti item juga tidak ada
+      throw new NotFoundError('Item not found in cart');
+    }
 
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.findProductByName.mockReturnValue(mockProduct);
-      cartRepo.getAllCarts.mockReturnValue(mockCarts);
+    // UBAH: Gunakan logika repository yang sudah disesuaikan
+    // Cek dulu apakah itemnya memang ada
+    const itemToRemove = await cartRepo.findCartItemByProductId(cart.id, productId);
+    if (!itemToRemove) throw new NotFoundError('Item not found in cart');
 
-      const result = cartService.addToCartService(username, loggedInUser, productName, quantity);
+    // Panggil fungsi repo yang benar
+    await cartRepo.removeCartItemByProductId(cart.id, productId);
 
-      expect(cartRepo.getAllCarts).toHaveBeenCalled();
-      expect(cartRepo.saveCarts).toHaveBeenCalled();
-      expect(result.items[0]).toEqual({ productName, quantity });
-    });
+    return await cartRepo.findCartByUserId(user.id);
+  }
+}
 
-    it("should update quantity if product already exists in cart", () => {
-      const mockUser = { username, role: "buyer" };
-      const productName = "Phone";
-      const quantity = 3;
-      const mockProduct = { productName };
-      const mockCarts = [
-        { username, items: [{ productName, quantity: 1 }] },
-      ];
 
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.findProductByName.mockReturnValue(mockProduct);
-      cartRepo.getAllCarts.mockReturnValue(mockCarts);
-
-      const result = cartService.addToCartService(username, loggedInUser, productName, quantity);
-
-      expect(result.items[0].quantity).toBe(4);
-      expect(cartRepo.saveCarts).toHaveBeenCalled();
-    });
-
-    it("should throw error if product not found", () => {
-      const mockUser = { username, role: "buyer" };
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.findProductByName.mockReturnValue(null);
-
-      expect(() =>
-        cartService.addToCartService(username, loggedInUser, "Unknown", 2)
-      ).toThrow("PRODUCT_NOT_FOUND");
-    });
-  });
-
-  // --- removeFromCartService ---
-  describe("removeFromCartService", () => {
-    it("should remove product from cart", () => {
-      const mockUser = { username, role: "buyer" };
-      const productName = "Phone";
-      const mockCarts = [
-        { username, items: [{ productName, quantity: 2 }] },
-      ];
-
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.getAllCarts.mockReturnValue(mockCarts);
-
-      const result = cartService.removeFromCartService(username, loggedInUser, productName);
-
-      expect(result.items.length).toBe(0);
-      expect(cartRepo.saveCarts).toHaveBeenCalled();
-    });
-
-    it("should throw error if cart not found", () => {
-      const mockUser = { username, role: "buyer" };
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.getAllCarts.mockReturnValue([]);
-
-      expect(() =>
-        cartService.removeFromCartService(username, loggedInUser, "Phone")
-      ).toThrow("CART_NOT_FOUND");
-    });
-  });
-
-  // --- updateCartService ---
-  describe("updateCartService", () => {
-    it("should update item quantity", () => {
-      const mockUser = { username, role: "buyer" };
-      const productName = "Phone";
-      const mockCarts = [
-        { username, items: [{ productName, quantity: 1 }] },
-      ];
-
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.getAllCarts.mockReturnValue(mockCarts);
-
-      const result = cartService.updateCartService(username, loggedInUser, productName, 5);
-
-      expect(result.items[0].quantity).toBe(5);
-      expect(cartRepo.saveCarts).toHaveBeenCalled();
-    });
-
-    it("should throw error if item not found", () => {
-      const mockUser = { username, role: "buyer" };
-      const mockCarts = [{ username, items: [] }];
-
-      cartRepo.findUserByUsername.mockReturnValue(mockUser);
-      cartRepo.getAllCarts.mockReturnValue(mockCarts);
-
-      expect(() =>
-        cartService.updateCartService(username, loggedInUser, "Unknown", 3)
-      ).toThrow("ITEM_NOT_FOUND");
-    });
-  });
-});
+module.exports = new CartService();

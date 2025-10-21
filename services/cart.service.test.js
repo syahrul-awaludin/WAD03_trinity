@@ -1,83 +1,202 @@
-const cartRepository = require("../../repositories/cart.repository");
-const CartService = require("../../services/cart.service");
+// services/cart.service.test.js
+const cartService = require('./cart.service');
+const userRepo = require('../repositories/user.repository');
+const productRepo = require('../repositories/product.repository');
+const cartRepo = require('../repositories/cart.repository');
+const { NotFoundError, BadRequestError } = require('../utils/errors'); 
 
-jest.mock("../../repositories/cart.repository");
+// Mock semua repository
+jest.mock('../repositories/user.repository', () => ({
+  // UBAH: Sesuaikan nama fungsi
+  findByUsername: jest.fn(), 
+}));
+jest.mock('../repositories/product.repository', () => ({
+  // UBAH: Sesuaikan nama fungsi
+  getProductByName: jest.fn(),
+}));
+jest.mock('../repositories/cart.repository', () => ({
+  findCartByUserId: jest.fn(),
+  createCart: jest.fn(),
+  addCartItem: jest.fn(),
+  updateItemQuantity: jest.fn(),
+  // UBAH: Sesuaikan dengan fungsi repo yang baru
+  findCartItemByProductId: jest.fn(), 
+  removeCartItemByProductId: jest.fn(),
+}));
 
-describe("CartService", () => {
-  afterEach(() => {
-    jest.clearAllMocks();
+// --- Data Mock Konsisten ---
+// (Gunakan data yang sama dari tes repository)
+const MOCK_USER_ALICE_ID = "a11ce-a11ce-a11ce-a11ce-a11ce";
+const MOCK_USER_ALICE = { 
+  id: MOCK_USER_ALICE_ID, 
+  username: 'alice', 
+  name: 'Alice' 
+};
+
+const MOCK_PRODUCT_PEDIGREE = {
+  id: 1,
+  productName: "Pedigree",
+  price: 3000000,
+};
+
+const MOCK_CART_ALICE = { 
+  id: 1, 
+  buyerId: MOCK_USER_ALICE_ID, 
+  items: [] 
+};
+
+const MOCK_ITEM_PEDIGREE = { 
+  id: 10, 
+  cartId: MOCK_CART_ALICE.id, 
+  productId: MOCK_PRODUCT_PEDIGREE.id, 
+  quantity: 2 
+};
+// ----------------------------
+
+// UBAH: Gunakan afterEach agar konsisten dengan product.service.test.js
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
+// UBAH: Kelompokkan semua tes dalam satu describe
+describe('CartService', () => {
+
+  describe('getCart', () => {
+    it('should return an existing cart', async () => {
+      userRepo.findByUsername.mockResolvedValue(MOCK_USER_ALICE);
+      cartRepo.findCartByUserId.mockResolvedValue(MOCK_CART_ALICE);
+
+      const cart = await cartService.getCart('alice');
+      
+      expect(cart).toEqual(MOCK_CART_ALICE);
+      expect(cartRepo.createCart).not.toHaveBeenCalled();
+    });
+
+    it('should create and return a new cart if one does not exist', async () => {
+      userRepo.findByUsername.mockResolvedValue(MOCK_USER_ALICE);
+      cartRepo.findCartByUserId.mockResolvedValue(null); // <-- Tidak ditemukan
+      cartRepo.createCart.mockResolvedValue(MOCK_CART_ALICE); // <-- Dibuat
+
+      const cart = await cartService.getCart('alice');
+
+      expect(cartRepo.findCartByUserId).toHaveBeenCalledWith(MOCK_USER_ALICE_ID);
+      expect(cartRepo.createCart).toHaveBeenCalledWith(MOCK_USER_ALICE_ID);
+      expect(cart).toEqual(MOCK_CART_ALICE);
+    });
+
+    it('should throw NotFoundError if user not found', async () => {
+      userRepo.findByUsername.mockResolvedValue(null);
+      await expect(cartService.getCart('nonexistent'))
+        .rejects.toThrow(NotFoundError);
+    });
   });
 
-  describe("getCartService", () => {
-    it("returns existing cart if found", async () => {
-      const userId = "user-123";
-      const existingCart = { id: "cart-1", userId, items: [] };
-
-      cartRepository.getCartByUserId.mockResolvedValue(existingCart);
-
-      const result = await CartService.getCartService(userId);
-
-      expect(cartRepository.getCartByUserId).toHaveBeenCalledWith(userId);
-      expect(cartRepository.createCart).not.toHaveBeenCalled();
-      expect(result).toEqual(existingCart);
+  describe('addToCart', () => {
+    
+    beforeEach(() => {
+      // Setup default mock untuk user, product, dan cart
+      userRepo.findByUsername.mockResolvedValue(MOCK_USER_ALICE);
+      productRepo.getProductByName.mockResolvedValue(MOCK_PRODUCT_PEDIGREE);
+      
+      // Mock helper getOrCreateCart
+      // Asumsikan cart sudah ada
+      cartRepo.findCartByUserId.mockResolvedValue(MOCK_CART_ALICE);
+      
+      // Mock 'findCartByUserId' terakhir yang dipanggil untuk mengembalikan hasil
+      cartRepo.findCartByUserId.mockResolvedValueOnce(MOCK_CART_ALICE);
     });
 
-    it("creates new cart if not found", async () => {
-      const userId = "user-456";
-      const newCart = { id: "cart-2", userId, items: [] };
+    it('should add a new item to cart', async () => {
+      // UBAH: Service sekarang memanggil findCartItemByProductId
+      cartRepo.findCartItemByProductId.mockResolvedValue(null); // <-- Item belum ada
+      
+      // Mock 'findCartByUserId' di *akhir* service
+      const updatedCart = { ...MOCK_CART_ALICE, items: [MOCK_ITEM_PEDIGREE] };
+      cartRepo.findCartByUserId.mockResolvedValue(updatedCart); 
 
-      cartRepository.getCartByUserId.mockResolvedValue(null);
-      cartRepository.createCart.mockResolvedValue(newCart);
+      const cart = await cartService.addToCart('alice', 'Pedigree', 2);
 
-      const result = await CartService.getCartService(userId);
+      expect(cartRepo.findCartItemByProductId).toHaveBeenCalledWith(MOCK_CART_ALICE.id, MOCK_PRODUCT_PEDIGREE.id);
+      expect(cartRepo.addCartItem).toHaveBeenCalledWith(MOCK_CART_ALICE.id, MOCK_PRODUCT_PEDIGREE.id, 2);
+      expect(cartRepo.updateItemQuantity).not.toHaveBeenCalled();
+      expect(cart.items).toHaveLength(1);
+    });
 
-      expect(cartRepository.getCartByUserId).toHaveBeenCalledWith(userId);
-      expect(cartRepository.createCart).toHaveBeenCalledWith(userId);
-      expect(result).toEqual(newCart);
+    it('should update quantity if item already exists', async () => {
+      // UBAH: Service sekarang memanggil findCartItemByProductId
+      cartRepo.findCartItemByProductId.mockResolvedValue(MOCK_ITEM_PEDIGREE); // <-- Item SUDAH ada
+
+      const updatedCart = { ...MOCK_CART_ALICE, items: [{ ...MOCK_ITEM_PEDIGREE, quantity: 3 }] };
+      cartRepo.findCartByUserId.mockResolvedValue(updatedCart);
+
+      const cart = await cartService.addToCart('alice', 'Pedigree', 1); // Tambah 1
+
+      expect(cartRepo.findCartItemByProductId).toHaveBeenCalledWith(MOCK_CART_ALICE.id, MOCK_PRODUCT_PEDIGREE.id);
+      expect(cartRepo.updateItemQuantity).toHaveBeenCalledWith(MOCK_ITEM_PEDIGREE.id, 3); // 2 (existing) + 1 (new)
+      expect(cartRepo.addCartItem).not.toHaveBeenCalled();
+      expect(cart.items[0].quantity).toBe(3);
+    });
+
+    it('should throw NotFoundError if product not found', async () => {
+      productRepo.getProductByName.mockResolvedValue(null);
+      await expect(cartService.addToCart('alice', 'ProdukAsal', 1))
+        .rejects.toThrow(NotFoundError);
+    });
+    
+    it('should throw BadRequestError if quantity is zero or less', async () => {
+      await expect(cartService.addToCart('alice', 'Pedigree', 0))
+        .rejects.toThrow(BadRequestError);
+      await expect(cartService.addToCart('alice', 'Pedigree', -1))
+        .rejects.toThrow(BadRequestError);
     });
   });
-
-  describe("addItemToCart", () => {
-    it("adds new product if not in cart", async () => {
-      const userId = "user-789";
-      const productId = 10;
-      const quantity = 2;
-      const cart = { id: "cart-3", userId };
-
-      const existingCartItem = null;
-      const newItem = { id: "item-1", cartId: cart.id, productId, quantity };
-
-      cartRepository.getCartByUserId.mockResolvedValue(cart);
-      cartRepository.getCartItem.mockResolvedValue(existingCartItem);
-      cartRepository.createCartItem.mockResolvedValue(newItem);
-
-      const result = await CartService.addItemToCart(userId, productId, quantity);
-
-      expect(cartRepository.getCartByUserId).toHaveBeenCalledWith(userId);
-      expect(cartRepository.getCartItem).toHaveBeenCalledWith(cart.id, productId);
-      expect(cartRepository.createCartItem).toHaveBeenCalledWith(cart.id, productId, quantity);
-      expect(result).toEqual(newItem);
+  
+  // TAMBAHAN: Tes untuk removeFromCart
+  describe('removeFromCart', () => {
+    
+    beforeEach(() => {
+      userRepo.findByUsername.mockResolvedValue(MOCK_USER_ALICE);
+      // Asumsikan cart ada dan berisi item
+      cartRepo.findCartByUserId.mockResolvedValue({
+        ...MOCK_CART_ALICE,
+        items: [MOCK_ITEM_PEDIGREE]
+      });
     });
 
-    it("updates quantity if product already in cart", async () => {
-      const userId = "user-999";
-      const productId = 20;
-      const quantity = 3;
-      const cart = { id: "cart-4", userId };
+    it('should remove an item successfully', async () => {
+      // Item ditemukan
+      cartRepo.findCartItemByProductId.mockResolvedValue(MOCK_ITEM_PEDIGREE);
+      // Mock cartRepo.remove...
+      cartRepo.removeCartItemByProductId.mockResolvedValue({ count: 1 });
+      
+      // Mock 'findCartByUserId' di *akhir* service
+      cartRepo.findCartByUserId.mockResolvedValue(MOCK_CART_ALICE); // Cart kosong
 
-      const existingCartItem = { id: "item-2", cartId: cart.id, productId, quantity: 1 };
-      const updatedCartItem = { ...existingCartItem, quantity: 4 };
+      const cart = await cartService.removeFromCart('alice', MOCK_PRODUCT_PEDIGREE.id);
 
-      cartRepository.getCartByUserId.mockResolvedValue(cart);
-      cartRepository.getCartItem.mockResolvedValue(existingCartItem);
-      cartRepository.updateCartItemQuantity.mockResolvedValue(updatedCartItem);
+      expect(cartRepo.findCartItemByProductId).toHaveBeenCalledWith(MOCK_CART_ALICE.id, MOCK_PRODUCT_PEDIGREE.id);
+      expect(cartRepo.removeCartItemByProductId).toHaveBeenCalledWith(MOCK_CART_ALICE.id, MOCK_PRODUCT_PEDIGREE.id);
+      expect(cart.items).toHaveLength(0);
+    });
 
-      const result = await CartService.addItemToCart(userId, productId, quantity);
+    it('should throw NotFoundError if item is not in cart', async () => {
+      // Item TIDAK ditemukan
+      cartRepo.findCartItemByProductId.mockResolvedValue(null);
 
-      expect(cartRepository.getCartByUserId).toHaveBeenCalledWith(userId);
-      expect(cartRepository.getCartItem).toHaveBeenCalledWith(cart.id, productId);
-      expect(cartRepository.updateCartItemQuantity).toHaveBeenCalledWith(existingCartItem.id, 4);
-      expect(result).toEqual(updatedCartItem);
+      await expect(cartService.removeFromCart('alice', 999)) // 999 = ID produk palsu
+        .rejects.toThrow(NotFoundError);
+      
+      expect(cartRepo.removeCartItemByProductId).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundError if cart does not exist', async () => {
+      // Cart TIDAK ditemukan
+      cartRepo.findCartByUserId.mockResolvedValue(null);
+
+      await expect(cartService.removeFromCart('alice', MOCK_PRODUCT_PEDIGREE.id))
+        .rejects.toThrow(NotFoundError);
+      
+      expect(cartRepo.findCartItemByProductId).not.toHaveBeenCalled();
     });
   });
 });
